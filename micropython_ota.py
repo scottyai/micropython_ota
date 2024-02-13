@@ -69,6 +69,7 @@ def ota_update(host, project, filenames=None, use_version_prefix=True, user=None
                     for dir in filename.split('/'):
                         if len(dir) > 0:
                             built_path=f"{dir_path}/{dir}"
+                            dir_path = built_path
                             try:
                                 uos.mkdir(built_path)
                             except OSError as e:
@@ -96,6 +97,7 @@ def ota_update(host, project, filenames=None, use_version_prefix=True, user=None
                         for dir in filename.split('/'):
                             if len(dir) > 0:
                                 built_path=f"{dir_path}/{dir}"
+                                dir_path = built_path
                                 try:
                                     uos.mkdir(built_path)
                                 except OSError as e:
