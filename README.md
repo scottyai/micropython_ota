@@ -161,7 +161,9 @@ If you do not wish to hard code the firmware file names in your code, you may us
     |     |- manifest
     |     |- <filename1>
     |     |- <filename2>
-    |     |- ...
+    |     |- <nested_subdir>
+    |        |- <another_subdir>
+    |           |- <filename3>
     ```
 
 The contents of the manifest file are identical to the file names you would supply the call to `ota_update()` with one file listed per line.
@@ -171,6 +173,7 @@ The contents of the manifest file are identical to the file names you would supp
     file2.py
     dir1/
     dir1/file3.py
+    dir2/nested/file4.py
     ...
     ```
 
