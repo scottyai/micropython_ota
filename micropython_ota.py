@@ -1,8 +1,8 @@
 import machine
 import ubinascii
+import uhashlib
 import uos
 import urequests
-
 
 def check_version(host, project, auth=None, timeout=5) -> (bool, str):
     current_version = ''
@@ -38,8 +38,29 @@ def fetch_manifest(host, project, remote_version, prefix_or_path_separator, auth
     if response_status_code != 200:
         print(f'Remote manifest file {host}/{project}/{remote_version}{prefix_or_path_separator}manifest not found')
         raise Exception(f"Missing manifest for {remote_version}")
-    return response_text.split()
-    
+    return process_manifet(response=response_text)
+
+def process_manifet(response):
+    '''
+        Processes a manifest file into an array of dictionary valuses for a file/sha256 hash
+        e.g. 
+            [{"file":"test.py", "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+             {"file":"random.py", "sha256": "648fec30f74b77e2c02bb810129ecf9204ed5c3715fde2111ee4ad756f12e3b6"},]
+    '''
+    lines = response.splitlines()
+    manifest = []
+    for line in lines:
+        if line is not "":
+            file_details = line.split(' ')
+            if len(file_details) == 2:
+                file = file_details[0]
+                file_hash = file_details[1]
+                manifest.append({'file': file, "sha256": file_hash})
+            else:
+                file = file_details[0]
+                manifest.append({'file': file})
+    return manifest
+
 def generate_auth(user=None, passwd=None) -> str | None:
     if not user and not passwd:
         return None
@@ -48,6 +69,12 @@ def generate_auth(user=None, passwd=None) -> str | None:
     auth_bytes = ubinascii.b2a_base64(f'{user}:{passwd}'.encode())
     return auth_bytes.decode().strip()
 
+def get_sha256_hash_file(filename, buffer_size=2**10*8):
+    file_hash = uhashlib.sha256()
+    with open(filename, mode="rb") as f:
+        while chunk := f.read(buffer_size):
+            file_hash.update(chunk)
+    return ubinascii.hexlify(file_hash.digest()).decode('utf-8')
 
 def ota_update(host, project, filenames=None, use_version_prefix=True, user=None, passwd=None, hard_reset_device=True, soft_reset_device=False, timeout=5) -> None:
     all_files_found = True
@@ -64,9 +91,9 @@ def ota_update(host, project, filenames=None, use_version_prefix=True, user=None
             if filenames is None:
                 filenames = fetch_manifest(host, project, remote_version, prefix_or_path_separator, auth=auth, timeout=timeout)
             for filename in filenames:
-                if filename.endswith('/'):
+                if filename["file"].endswith('/'):
                     dir_path="tmp"
-                    for dir in filename.split('/'):
+                    for dir in filename["file"].split('/'):
                         if len(dir) > 0:
                             built_path=f"{dir_path}/{dir}"
                             dir_path = built_path
@@ -77,24 +104,29 @@ def ota_update(host, project, filenames=None, use_version_prefix=True, user=None
                                     raise
                     continue
                 if auth:
-                    response = urequests.get(f'{host}/{project}/{remote_version}{prefix_or_path_separator}{filename}', headers={'Authorization': f'Basic {auth}'}, timeout=timeout)
+                    response = urequests.get(f'{host}/{project}/{remote_version}{prefix_or_path_separator}{filename["file"]}', headers={'Authorization': f'Basic {auth}'}, timeout=timeout)
                 else:
-                    response = urequests.get(f'{host}/{project}/{remote_version}{prefix_or_path_separator}{filename}', timeout=timeout)
+                    response = urequests.get(f'{host}/{project}/{remote_version}{prefix_or_path_separator}{filename["file"]}', timeout=timeout)
                 response_status_code = response.status_code
                 response_content = response.content
                 response.close()
                 if response_status_code != 200:
-                    print(f'Remote source file {host}/{project}/{remote_version}{prefix_or_path_separator}{filename} not found')
+                    print(f'Remote source file {host}/{project}/{remote_version}{prefix_or_path_separator}{filename["file"]} not found')
                     all_files_found = False
                     continue
-                with open(f'tmp/{filename}', 'wb') as source_file:
-                    source_file.write(response_content)
+                if filename['sha256'] == ubinascii.hexlify(uhashlib.sha256(response_content).digest()).decode('utf-8'):
+                    with open(f'tmp/{filename["file"]}', 'wb') as source_file:
+                        source_file.write(response_content)
+                else:
+                    print (f"file {filename['file']} hash does not match so aborting the update")
+                    all_files_found = False
+                    continue
             if all_files_found:
                 dirs=[]
                 for filename in filenames:
-                    if filename.endswith('/'):
+                    if filename["file"].endswith('/'):
                         dir_path=""
-                        for dir in filename.split('/'):
+                        for dir in filename["file"].split('/'):
                             if len(dir) > 0:
                                 built_path=f"{dir_path}/{dir}"
                                 dir_path = built_path
@@ -105,10 +137,10 @@ def ota_update(host, project, filenames=None, use_version_prefix=True, user=None
                                         raise
                                 dirs.append(f"tmp/{built_path}")
                         continue
-                    #print(f"tmp/{filename} -> {filename}")
-                    with open(f'tmp/{filename}', 'rb') as source_file, open(filename, 'wb') as target_file:
+                    #print(f"tmp/{filename['file']} -> {filename['file']}")
+                    with open(f'tmp/{filename["file"]}', 'rb') as source_file, open(filename["file"], 'wb') as target_file:
                         target_file.write(source_file.read())
-                    uos.remove(f'tmp/{filename}')
+                    uos.remove(f'tmp/{filename["file"]}')
                 try:
                     while len(dirs) > 0:
                         uos.rmdir(dirs.pop())
