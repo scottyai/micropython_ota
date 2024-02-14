@@ -169,15 +169,17 @@ If you do not wish to hard code the firmware file names in your code, you may us
 The contents of the manifest file are identical to the file names you would supply the call to `ota_update()` with one file listed per line.
 
     ```
-    file1.py
-    file2.py
+    file1.py a9fd5aa1e8e9340ff3fd862fb2c754e796b6874f0adb64bc2768fdf991f4a1cf
+    file2.py 7bb247567b1fde829ffbbe63f9d9a8348a045d4d034b9a33dd3a0eb4a7ec25de
     dir1/
-    dir1/file3.py
-    dir2/nested/file4.py
+    dir1/file3.py 648fec30f74b77e2c02bb810129ecf9204ed5c3715fde2111ee4ad756f12e3b6
+    dir2/nested/
+    dir2/nested/file4.py e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
     ...
     ```
+The manifest file now has a sha256 added to each line in containing a "file". The OTA will perform a check as each file is downloaded to ensure the file has been received correctly. If a file fails this check the OTA update is aborted and the micropython is reset.
 
-Note that using a manifest supports adding subdirectories.  In order to use/create a subdirectory, the directory name MUST end with a forward-slash and be listed above any files that are to reside within that directory.
+Note that using a manifest supports adding subdirectories.  In order to use/create a subdirectory, the directory name MUST end with a forward-slash and be listed above any files that are to reside within that directory. Nested subdirectories are also supported under this version.
 
 
 ## HTTP(S) Basic Authentication
