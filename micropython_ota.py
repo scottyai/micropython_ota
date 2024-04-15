@@ -3,6 +3,7 @@ import ubinascii
 import uhashlib
 import uos
 import urequests
+import logging
 
 def check_version(host, project, auth=None, timeout=5) -> (bool, str):
     current_version = ''
@@ -19,12 +20,12 @@ def check_version(host, project, auth=None, timeout=5) -> (bool, str):
         response_text = response.text
         response.close()
         if response_status_code != 200:
-            print(f'Remote version file {host}/{project}/version not found')
+            logging.warning('Remote version file %s/%s/ version not found', host,project)
             return False, current_version
         remote_version = response_text.strip()
         return current_version != remote_version, remote_version
     except Exception as ex:
-        print(f'Something went wrong: {ex}')
+        logging.error('Something went wrong: %s', ex)
         return False, current_version
 
 def fetch_manifest(host, project, remote_version, prefix_or_path_separator, auth=None, timeout=5):
@@ -36,7 +37,8 @@ def fetch_manifest(host, project, remote_version, prefix_or_path_separator, auth
     response_text = response.text
     response.close()
     if response_status_code != 200:
-        print(f'Remote manifest file {host}/{project}/{remote_version}{prefix_or_path_separator}manifest not found')
+        logging.error('Remote manifest file %s/%s/%s%s manifest not found',
+                      host,project,remote_version,prefix_or_path_separator)
         raise Exception(f"Missing manifest for {remote_version}")
     return process_manifet(response=response_text)
 
@@ -111,14 +113,15 @@ def ota_update(host, project, filenames=None, use_version_prefix=True, user=None
                 response_content = response.content
                 response.close()
                 if response_status_code != 200:
-                    print(f'Remote source file {host}/{project}/{remote_version}{prefix_or_path_separator}{filename["file"]} not found')
+                    logging.error('Remote source file %s/%s/%s%s%s not found',
+                                  host,project,remote_version,prefix_or_path_separator,filename["file"])
                     all_files_found = False
                     continue
                 if filename['sha256'] == ubinascii.hexlify(uhashlib.sha256(response_content).digest()).decode('utf-8'):
                     with open(f'tmp/{filename["file"]}', 'wb') as source_file:
                         source_file.write(response_content)
                 else:
-                    print (f"file {filename['file']} hash does not match so aborting the update")
+                    logging.error("File %s hash does not match so aborting the update", filename['file'])
                     all_files_found = False
                     continue
             if all_files_found:
@@ -137,7 +140,6 @@ def ota_update(host, project, filenames=None, use_version_prefix=True, user=None
                                         raise
                                 dirs.append(f"tmp/{built_path}")
                         continue
-                    #print(f"tmp/{filename['file']} -> {filename['file']}")
                     with open(f'tmp/{filename["file"]}', 'rb') as source_file, open(filename["file"], 'wb') as target_file:
                         target_file.write(source_file.read())
                     uos.remove(f'tmp/{filename["file"]}')
@@ -147,16 +149,16 @@ def ota_update(host, project, filenames=None, use_version_prefix=True, user=None
                     uos.rmdir('tmp')
                 except:
                     pass
-                with open('version', 'w') as current_version_file:
+                with open('version', 'w', encoding='utf-8') as current_version_file:
                     current_version_file.write(remote_version)
                 if soft_reset_device:
-                    print('Soft-resetting device...')
+                    logging.warning('Soft-resetting device...')
                     machine.soft_reset()
                 if hard_reset_device:
-                    print('Hard-resetting device...')
+                    logging.warning('Hard-resetting device...')
                     machine.reset()
     except Exception as ex:
-        print(f'Something went wrong: {ex}')
+        logging.error('Something went wrong: %s', ex)
         raise ex
 
 
@@ -165,8 +167,8 @@ def check_for_ota_update(host, project, user=None, passwd=None, timeout=5, soft_
     version_changed, remote_version = check_version(host, project, auth=auth, timeout=timeout)
     if version_changed:
         if soft_reset_device:
-            print(f'Found new version {remote_version}, soft-resetting device...')
+            logging.warning('Found new version %s, soft-resetting device...', remote_version)
             machine.soft_reset()
         else:
-            print(f'Found new version {remote_version}, hard-resetting device...')
+            logging.warning('Found new version %s, hard-resetting device...', remote_version)
             machine.reset()

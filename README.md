@@ -68,6 +68,13 @@ server-root/
    |- v1.0.0_main.py
    |- v1.0.0_data.py
 ```
+## Dependency (Micropython >= 1.19)
+Over-The-Air updates are now using the logging framework. This creates a depenedency that needs to be installed. This can be done as per below:
+
+```python
+import mip
+mip.install('logging')
+```
 
 ## Installation
 
