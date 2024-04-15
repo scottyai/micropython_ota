@@ -1,21 +1,21 @@
 import machine
-import ubinascii
-import uhashlib
-import uos
-import urequests
+import binascii
+import hashlib
+import os
+import requests
 import logging
 
 def check_version(host, project, auth=None, timeout=5) -> (bool, str):
     current_version = ''
     try:
-        if 'version' in uos.listdir():
+        if 'version' in os.listdir():
             with open('version', 'r') as current_version_file:
                 current_version = current_version_file.readline().strip()
 
         if auth:
-            response = urequests.get(f'{host}/{project}/version', headers={'Authorization': f'Basic {auth}'}, timeout=timeout)
+            response = requests.get(f'{host}/{project}/version', headers={'Authorization': f'Basic {auth}'}, timeout=timeout)
         else:
-            response = urequests.get(f'{host}/{project}/version', timeout=timeout)
+            response = requests.get(f'{host}/{project}/version', timeout=timeout)
         response_status_code = response.status_code
         response_text = response.text
         response.close()
@@ -30,9 +30,9 @@ def check_version(host, project, auth=None, timeout=5) -> (bool, str):
 
 def fetch_manifest(host, project, remote_version, prefix_or_path_separator, auth=None, timeout=5):
     if auth:
-        response = urequests.get(f'{host}/{project}/{remote_version}{prefix_or_path_separator}manifest', headers={'Authorization': f'Basic {auth}'}, timeout=timeout)
+        response = requests.get(f'{host}/{project}/{remote_version}{prefix_or_path_separator}manifest', headers={'Authorization': f'Basic {auth}'}, timeout=timeout)
     else:
-        response = urequests.get(f'{host}/{project}/{remote_version}{prefix_or_path_separator}manifest', timeout=timeout)
+        response = requests.get(f'{host}/{project}/{remote_version}{prefix_or_path_separator}manifest', timeout=timeout)
     response_status_code = response.status_code
     response_text = response.text
     response.close()
@@ -68,15 +68,15 @@ def generate_auth(user=None, passwd=None) -> str | None:
         return None
     if (user and not passwd) or (passwd and not user):
         raise ValueError('Either only user or pass given. None or both are required.')
-    auth_bytes = ubinascii.b2a_base64(f'{user}:{passwd}'.encode())
+    auth_bytes = binascii.b2a_base64(f'{user}:{passwd}'.encode())
     return auth_bytes.decode().strip()
 
 def get_sha256_hash_file(filename, buffer_size=2**10*8):
-    file_hash = uhashlib.sha256()
+    file_hash = hashlib.sha256()
     with open(filename, mode="rb") as f:
         while chunk := f.read(buffer_size):
             file_hash.update(chunk)
-    return ubinascii.hexlify(file_hash.digest()).decode('utf-8')
+    return binascii.hexlify(file_hash.digest()).decode('utf-8')
 
 def ota_update(host, project, filenames=None, use_version_prefix=True, user=None, passwd=None, hard_reset_device=True, soft_reset_device=False, timeout=5) -> None:
     all_files_found = True
@@ -86,7 +86,7 @@ def ota_update(host, project, filenames=None, use_version_prefix=True, user=None
         version_changed, remote_version = check_version(host, project, auth=auth, timeout=timeout)
         if version_changed:
             try:
-                uos.mkdir('tmp')
+                os.mkdir('tmp')
             except OSError as e:
                 if e.errno != 17:
                     raise
@@ -100,15 +100,15 @@ def ota_update(host, project, filenames=None, use_version_prefix=True, user=None
                             built_path=f"{dir_path}/{dir}"
                             dir_path = built_path
                             try:
-                                uos.mkdir(built_path)
+                                os.mkdir(built_path)
                             except OSError as e:
                                 if e.errno != 17:
                                     raise
                     continue
                 if auth:
-                    response = urequests.get(f'{host}/{project}/{remote_version}{prefix_or_path_separator}{filename["file"]}', headers={'Authorization': f'Basic {auth}'}, timeout=timeout)
+                    response = requests.get(f'{host}/{project}/{remote_version}{prefix_or_path_separator}{filename["file"]}', headers={'Authorization': f'Basic {auth}'}, timeout=timeout)
                 else:
-                    response = urequests.get(f'{host}/{project}/{remote_version}{prefix_or_path_separator}{filename["file"]}', timeout=timeout)
+                    response = requests.get(f'{host}/{project}/{remote_version}{prefix_or_path_separator}{filename["file"]}', timeout=timeout)
                 response_status_code = response.status_code
                 response_content = response.content
                 response.close()
@@ -117,7 +117,7 @@ def ota_update(host, project, filenames=None, use_version_prefix=True, user=None
                                   host,project,remote_version,prefix_or_path_separator,filename["file"])
                     all_files_found = False
                     continue
-                if filename['sha256'] == ubinascii.hexlify(uhashlib.sha256(response_content).digest()).decode('utf-8'):
+                if filename['sha256'] == binascii.hexlify(hashlib.sha256(response_content).digest()).decode('utf-8'):
                     with open(f'tmp/{filename["file"]}', 'wb') as source_file:
                         source_file.write(response_content)
                 else:
@@ -134,7 +134,7 @@ def ota_update(host, project, filenames=None, use_version_prefix=True, user=None
                                 built_path=f"{dir_path}/{dir}"
                                 dir_path = built_path
                                 try:
-                                    uos.mkdir(built_path)
+                                    os.mkdir(built_path)
                                 except OSError as e:
                                     if e.errno != 17:
                                         raise
@@ -142,11 +142,11 @@ def ota_update(host, project, filenames=None, use_version_prefix=True, user=None
                         continue
                     with open(f'tmp/{filename["file"]}', 'rb') as source_file, open(filename["file"], 'wb') as target_file:
                         target_file.write(source_file.read())
-                    uos.remove(f'tmp/{filename["file"]}')
+                    os.remove(f'tmp/{filename["file"]}')
                 try:
                     while len(dirs) > 0:
-                        uos.rmdir(dirs.pop())
-                    uos.rmdir('tmp')
+                        os.rmdir(dirs.pop())
+                    os.rmdir('tmp')
                 except:
                     pass
                 with open('version', 'w', encoding='utf-8') as current_version_file:
